@@ -4,10 +4,6 @@ from sklearn.linear_model import LogisticRegression
 from pairwise import pairwise_transform, flip_pairs
 
 
-from sklearn.linear_model import LogisticRegression
-
-from ambra.pairwise import pairwise_transform, flip_pairs
-
 def _nearest_sorted(scores, to_find, k=10):
     position = np.searchsorted(scores, to_find)
     width = k / 2
@@ -18,6 +14,7 @@ def _nearest_sorted(scores, to_find, k=10):
         return slice(-k, None)
     else:
         return slice(position - width, position + width + offset)
+
 
 def _interval_dist(a, b):
     a_lo, a_hi = a
