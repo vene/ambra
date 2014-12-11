@@ -10,12 +10,18 @@ with open(sys.argv[1]) as f:
 X = np.array([len(entry['text'].split()) for entry in entries])
 X = X[:, np.newaxis]
 Y = np.array([entry['true_interval'] for entry in entries])
-X, Y = shuffle(X, Y, random_state=0)
+Y_possible = np.array([entry['possible_intervals']
+                       for entry in entries])
+
+X, Y, Y_possible = shuffle(X, Y, Y_possible, random_state=0)
 
 
 print X.shape, Y.shape
 
-from ambra.classifiers import IntervalLogisticRegression
+from ambra.classifiers import IntervalLogisticRegression, interval_scorer
+
 print cross_val_score(IntervalLogisticRegression(C=1.0),
-                      X, Y, cv=KFold(len(X), n_folds=5))
+                      X, Y, cv=KFold(len(X), n_folds=5),
+                      scoring=interval_scorer,
+                      scorer_params=dict(Y_possible=Y_possible))
 
