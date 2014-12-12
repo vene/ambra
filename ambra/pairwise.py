@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.sparse as sp
 from sklearn.utils.validation import check_array, check_random_state
 
 
@@ -72,7 +73,6 @@ def flip_pairs(X_pairwise, random_state=None):
 
 if __name__ == '__main__':
     #X = np.arange(6)[:, np.newaxis]
-    import scipy.sparse as sp
     X = np.random.randn(6, 50)
     X[X < 0] = 0
     Xsp = sp.csr_matrix(X)

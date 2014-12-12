@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from sklearn.utils.extmath import safe_sparse_dot
 
 from pairwise import pairwise_transform, flip_pairs
 
@@ -27,16 +28,15 @@ def _interval_dist(a, b):
 
 class IntervalLogisticRegression(LogisticRegression):
     def __init__(self, penalty='l2', dual=False, tol=1e-4, C=1.0,
-                 fit_intercept=True, intercept_scaling=1, class_weight=None,
                  random_state=None, solver='liblinear', max_iter=100,
                  multi_class='ovr', verbose=0, n_neighbors=5):
         self.penalty = penalty
         self.dual = dual
         self.tol = tol
         self.C = C
-        self.fit_intercept = fit_intercept
-        self.intercept_scaling = intercept_scaling
-        self.class_weight = class_weight
+        self.fit_intercept = False
+        self.intercept_scaling = 1
+        self.class_weight = None
         self.random_state = random_state
         self.solver = solver
         self.max_iter = max_iter
@@ -45,10 +45,10 @@ class IntervalLogisticRegression(LogisticRegression):
         self.n_neighbors = n_neighbors
 
     def fit(self, X, y):
-        X_pw, _ = pairwise_transform(X, y)
+        X_pw = pairwise_transform(X, y)
         X_pw, y_pw = flip_pairs(X_pw, random_state=0)  # not fair
         super(IntervalLogisticRegression, self).fit(X_pw, y_pw)
-        train_scores = np.dot(X, self.coef_.ravel())
+        train_scores = safe_sparse_dot(X, self.coef_.ravel())
         order = np.argsort(train_scores)
         self.train_intervals_ = y[order]
         self.train_scores_ = train_scores[order]
@@ -56,7 +56,7 @@ class IntervalLogisticRegression(LogisticRegression):
 
     def score(self, X, y):
         print("pairwise accuracy is used")
-        X_pw, _ = pairwise_transform(X, y)
+        X_pw = pairwise_transform(X, y)
         X_pw, y_pw = flip_pairs(X_pw, random_state=0)  # not fair
         return super(IntervalLogisticRegression, self).score(X_pw, y_pw)
 
@@ -70,7 +70,7 @@ class IntervalLogisticRegression(LogisticRegression):
         return possible_intervals[np.argmin(interval_scores)]
 
     def predict(self, X, Y_possible):
-        pred_scores = np.dot(X, self.coef_.ravel())
+        pred_scores = safe_sparse_dot(X, self.coef_.ravel())
         return [self._predict_interval(score, possible_intervals)
                 for score, possible_intervals
                 in zip(pred_scores, Y_possible)]
