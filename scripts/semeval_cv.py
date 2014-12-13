@@ -6,6 +6,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.grid_search import GridSearchCV
 from sklearn.utils import shuffle
 
+from ambra.classifiers import IntervalLogisticRegression
+from ambra.interval_scoring import semeval_interval_scorer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 class MyPipeline(Pipeline):
     def predict(self, X, Y_possible):
@@ -35,13 +38,10 @@ X_txt = X_txt[:100]
 Y = Y[:100]
 Y_possible = Y_possible[:100]
 
-from ambra.classifiers import IntervalLogisticRegression, interval_scorer
-from sklearn.feature_extraction.text import TfidfVectorizer
-
 grid = GridSearchCV(IntervalLogisticRegression(C=1.0),
-                    dict(n_neighbors=(5, 50, 100)),
+                    dict(n_neighbors=(5, 10, 50)),
                     verbose=True, cv=KFold(len(X_len), n_folds=5),
-                    scoring=interval_scorer,
+                    scoring=semeval_interval_scorer,
                     scorer_params=dict(Y_possible=Y_possible))
 
 grid.fit(X_len, Y)
@@ -49,12 +49,12 @@ print grid.best_score_, grid.best_params_
 
 vect = TfidfVectorizer(max_df=0.95, max_features=50, use_idf=False, norm="l1")
 pipe = MyPipeline([('vect', vect),
-                   ('clf', IntervalLogisticRegression(n_neighbors=100))])
+                   ('clf', IntervalLogisticRegression(n_neighbors=10))])
 
 
 grid = GridSearchCV(pipe, dict(clf__C=[0.01, 1.0, 10.0]),
                     verbose=True, cv=KFold(len(X_len), n_folds=5),
-                    scoring=interval_scorer,
+                    scoring=semeval_interval_scorer,
                     scorer_params=dict(Y_possible=Y_possible))
 
 grid.fit(X_txt, Y)

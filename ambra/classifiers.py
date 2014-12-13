@@ -76,11 +76,6 @@ class IntervalLogisticRegression(LogisticRegression):
                 in zip(pred_scores, Y_possible)]
 
 
-def interval_scorer(est, X, Y, Y_possible):
-    pred = est.predict(X, Y_possible)
-    return -np.mean(np.abs((Y - pred)[:, 0]))
-
-
 if __name__ == '__main__':
     X = np.arange(10)[:, np.newaxis]
     Y = [[4, 7], [1, 3], [2, 4], [8, 15], [5, 6], [1, 2], [10, 11],
