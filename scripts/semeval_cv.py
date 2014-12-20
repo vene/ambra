@@ -154,9 +154,10 @@ grid_params = {
 	'clf__C' : np.logspace(-3, 3, 3),
 	'union__pos__transf__min_df' : [3, 2, 1],
 	'union__pos__transf__max_df' : [1.0, 0.75, 0.5],
+        'union__pos__transf__analyzer__ngram_range' : [(2, 3), (2, 2), (3, 3)],
 	'union__tokens__transf__min_df' : [3, 2, 1],
 	'union__tokens__transf__max_df' : [1.0, 0.75, 0.5],
-        'union__pos__transf__analyzer__ngram_range' : [(2, 3), (2, 2), (3, 3)],
+        'union__tokens__transf__analyzer__ngram_range' : [(2, 3), (2, 2), (3, 3)],
         'fs__k' : [200, 300, 400]
 }
 
