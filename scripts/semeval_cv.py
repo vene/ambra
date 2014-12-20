@@ -8,6 +8,7 @@ from sklearn.utils import shuffle
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import SelectKBest, chi2
 
 from ambra.classifiers import IntervalLogisticRegression
 from ambra.interval_scoring import semeval_interval_scorer
@@ -63,7 +64,7 @@ class LengthFeatures(BaseEstimator, TransformerMixin):
         return ['n_sents', 'n_tokens', 'n_types', 'type_token_ratio']
 
 
-class NgramLolAnalyzer(object):
+class NgramLolAnalyzer(BaseEstimator):
     def _word_ngrams(self, tokens, stop_words=None):
         """Turn tokens into a sequence of n-grams after stop words filtering"""
         # handle stop words
@@ -83,14 +84,24 @@ class NgramLolAnalyzer(object):
                     tokens.append(" ".join(original_tokens[i: i + n]))
         return tokens
 
-    def __init__(self, ngram_range, lower=False):
+    def __init__(self, ngram_range=(1,1), lower=False):
         self.ngram_range=ngram_range
         self.lower = lower
 
     def __call__(self, doc):
         return [feature for sentence in doc
                 for feature in self._word_ngrams(sentence)]
+    
 
+class MySelectKBest(SelectKBest):
+    def fit(self, X, y):
+	y_flat = [get_coarse_interval(np.mean(yelem)) for yelem in y]
+        return super(MySelectKBest, self).fit(X, y_flat)
+
+def get_coarse_interval(year):
+    year = int(year)
+    lower = year / 100 * 100 + 50 * (year % 100 >= 50)
+    return str(lower) + "-" + str(lower + 50)
 
 with open(sys.argv[1]) as f:
     entries = json.load(f)
@@ -105,9 +116,10 @@ Y_possible = np.array([doc['all_fine_intervals'] for doc in entries])
 X, Y, Y_possible = shuffle(X, Y, Y_possible, random_state=0)
 
 # make it run fast
-X = X[:100]
-Y = Y[:100]
-Y_possible = Y_possible[:100]
+limit = 100
+X = X[:limit]
+Y = Y[:limit]
+Y_possible = Y_possible[:limit]
 
 pipe = MyPipeline([('vect', Proj(LengthFeatures(), key='lemmas')),
                    ('scale', StandardScaler(with_mean=False, with_std=True)),
@@ -126,20 +138,30 @@ print grid.best_score_, grid.best_params_
 print grid.best_estimator_.steps[-1][-1].coef_.ravel()
 
 
-pos_vect = TfidfVectorizer(use_idf=False, norm='l1', min_df=5, max_df=0.9,
-                           analyzer=NgramLolAnalyzer(ngram_range=(2, 3),
-                                                     lower=False))
+vectorizer = TfidfVectorizer(use_idf=False, norm='l1', analyzer=NgramLolAnalyzer(lower=False))
 
 union = FeatureUnion([('lenghts', Proj(LengthFeatures(), key='lemmas')),
-                      ('pos', Proj(pos_vect, key='pos'))])
+                      ('pos', Proj(vectorizer, key='pos')),
+                      ('tokens', Proj(vectorizer, key='tokens'))])
 
 pipe = MyPipeline([('union', union),
                    ('scale', StandardScaler(with_mean=False, with_std=True)),
+                   ('fs', MySelectKBest(chi2)),
                    ('clf', IntervalLogisticRegression(n_neighbors=10))])
 
 
+grid_params = {
+	'clf__C' : np.logspace(-3, 3, 3),
+	'union__pos__transf__min_df' : [3, 2, 1],
+	'union__pos__transf__max_df' : [1.0, 0.75, 0.5],
+	'union__tokens__transf__min_df' : [3, 2, 1],
+	'union__tokens__transf__max_df' : [1.0, 0.75, 0.5],
+        'union__pos__transf__analyzer__ngram_range' : [(2, 3), (2, 2), (3, 3)],
+        'fs__k' : [200, 300, 400]
+}
+
 grid = GridSearchCV(pipe,
-                    dict(clf__C=np.logspace(-3, 3, 3)),
+                    grid_params,
                     verbose=True, cv=KFold(len(X), n_folds=5),
                     scoring=semeval_interval_scorer,
                     scorer_params=dict(Y_possible=Y_possible),
