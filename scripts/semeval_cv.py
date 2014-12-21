@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import json
 import numpy as np
@@ -55,8 +56,10 @@ class LengthFeatures(BaseEstimator, TransformerMixin):
         all_toks = [tok for sent in doc for tok in sent]
         n_tokens = len(all_toks)
         n_types = len(set(all_toks))
-        type_token_ratio = n_tokens / float(n_types)
-        return np.array([n_sents, n_tokens, n_types, type_token_ratio],
+        #type_token_ratio = n_tokens / float(n_types)
+        return np.array([n_sents, n_tokens, n_types,
+                         #type_token_ratio
+                         ],
                         dtype=np.float)
 
     def transform(self, X, y=None):
@@ -64,7 +67,39 @@ class LengthFeatures(BaseEstimator, TransformerMixin):
         return np.row_stack([self._doc_features(doc) for doc in X])
 
     def get_feature_names(self):
-        return ['n_sents', 'n_tokens', 'n_types', 'type_token_ratio']
+        return ['n_sents', 'n_tokens', 'n_types',
+        #'type_token_ratio'
+        ]
+
+
+class StylisticFeatures(BaseEstimator, TransformerMixin):
+    def __init__(self, lower=True):
+        self.lower = lower
+
+    def fit(self, X, y=None):
+        return self
+
+    def _doc_features(self, doc):
+        # doc is a dict
+        tokens = doc['tokens']
+        lemmas = doc['lemmas']
+        all_tokens = [w.lower() if self.lower else w
+                      for sent in tokens for w in sent]
+        all_lemmas = [w.lower() if self.lower else w
+                      for sent in lemmas for w in sent]
+        avg_sent_len = np.mean([len(sent) for sent in tokens])
+        avg_word_len = np.mean([len(w) for w in tokens])
+        lex_density = len(set(all_tokens)) / len(all_tokens)
+        lex_richness = len(set(all_lemmas)) / len(all_lemmas)
+        return np.array([avg_sent_len, avg_word_len, lex_density, lex_richness],
+                        dtype=np.float)
+
+    def transform(self, X, y=None):
+        #x in X is a list of sents
+        return np.row_stack([self._doc_features(doc) for doc in X])
+
+    def get_feature_names(self):
+        return ['ASL', 'AWL', 'LD', 'LR']
 
 
 class NgramLolAnalyzer(BaseEstimator):
@@ -119,34 +154,68 @@ Y_possible = np.array([doc['all_fine_intervals'] for doc in entries])
 X, Y, Y_possible = shuffle(X, Y, Y_possible, random_state=0)
 
 # make it run fast
-limit = 500
-X = X[:limit]
-Y = Y[:limit]
-Y_possible = Y_possible[:limit]
+limit = None  # 500
+limit_pairs = 0.01
+if limit:
+    X = X[:limit]
+    Y = Y[:limit]
+    Y_possible = Y_possible[:limit]
 
+print("Length features")
+print("===============")
 pipe = MyPipeline([('vect', Proj(LengthFeatures(), key='lemmas')),
                    ('scale', StandardScaler(with_mean=False, with_std=True)),
                    ('clf', IntervalLogisticRegression(n_neighbors=10,
-                                                      limit_pairs=0.1,
+                                                      limit_pairs=limit_pairs,
                                                       random_state=0))])
 
-
 grid = GridSearchCV(pipe,
-                    dict(clf__C=np.logspace(-3, 3, 3)),
-                    verbose=True, cv=KFold(len(X), n_folds=5),
+                    dict(clf__C=np.logspace(-3, 3, 7)),
+                    verbose=False, cv=KFold(len(X), n_folds=5),
                     scoring=semeval_interval_scorer,
                     scorer_params=dict(Y_possible=Y_possible),
                     n_jobs=1)
 
 grid.fit(X, Y)
 grid_scores = [k.mean_validation_score for k in grid.grid_scores_]
-print "{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores))
-print grid.best_estimator_.steps[-1][-1].n_pairs_, " total pairs."
-print grid.best_estimator_.steps[-1][-1].coef_.ravel()
+print("{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores)))
+print(grid.best_estimator_.steps[-1][-1].n_pairs_, " total pairs.")
+print(grid.best_estimator_.steps[-1][-1].coef_.ravel())
+
+print()
+print("Stylistic features")
+print("==================")
+
+union = FeatureUnion([('lenghts', Proj(LengthFeatures(), key='lemmas')),
+                      ('style', StylisticFeatures())])
+
+pipe = MyPipeline([('vect', union),
+                   ('scale', StandardScaler(with_mean=False, with_std=True)),
+                   ('clf', IntervalLogisticRegression(n_neighbors=10,
+                                                      limit_pairs=limit_pairs,
+                                                      random_state=0))])
+
+grid = GridSearchCV(pipe,
+                    dict(clf__C=np.logspace(-3, 3, 7)),
+                    verbose=False, cv=KFold(len(X), n_folds=5),
+                    scoring=semeval_interval_scorer,
+                    scorer_params=dict(Y_possible=Y_possible),
+                    n_jobs=1)
+
+grid.fit(X, Y)
+grid_scores = [k.mean_validation_score for k in grid.grid_scores_]
+print("{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores)))
+print(grid.best_estimator_.steps[-1][-1].n_pairs_, " total pairs.")
+print(grid.best_estimator_.steps[-1][-1].coef_.ravel())
+
+print()
+print("Lex and POS features")
+print("====================")
 
 vectorizer = TfidfVectorizer(use_idf=False, norm='l1', analyzer=NgramLolAnalyzer(lower=False))
 
 union = FeatureUnion([('lenghts', Proj(LengthFeatures(), key='lemmas')),
+                      ('style', StylisticFeatures()),
                       ('pos', Proj(vectorizer, key='pos')),
                       ('tokens', Proj(vectorizer, key='tokens'))])
 
@@ -154,12 +223,12 @@ pipe = MyPipeline([('union', union),
                    ('scale', StandardScaler(with_mean=False, with_std=True)),
                    ('fs', MySelectKBest(chi2)),
                    ('clf', IntervalLogisticRegression(n_neighbors=10,
-                                                      limit_pairs=0.1,
+                                                      limit_pairs=limit_pairs,
                                                       random_state=0))])
 
 
 grid_params = {
-	'clf__C' : np.logspace(-3, 3, 3),
+	'clf__C' : np.logspace(-3, 3, 7),
 	'union__pos__transf__min_df' : [10, 5, 1],
 	'union__pos__transf__max_df' : [1.0, 0.99, 0.9, 0.8],
     'union__pos__transf__analyzer__ngram_range' : [(2, 3), (2, 2)],
@@ -174,17 +243,18 @@ grid = RandomizedSearchCV(pipe,
                           verbose=True, cv=KFold(len(X), n_folds=5),
                           scoring=semeval_interval_scorer,
                           scorer_params=dict(Y_possible=Y_possible),
-                          n_iter=10,
-                          n_jobs=4)
+                          n_iter=4,
+                          n_jobs=1,
+                          random_state=0)
 
 grid.fit(X, Y)
 grid_scores = [k.mean_validation_score for k in grid.grid_scores_]
-print "{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores))
-print grid.best_params_
+print("{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores)))
+print(grid.best_params_)
 
 feature_names = grid.best_estimator_.steps[0][1].get_feature_names()
 coef = grid.best_estimator_.steps[-1][-1].coef_.ravel()
 
-for idx in np.argsort(np.abs(coef))[:10]:
+for idx in np.argsort(-np.abs(coef))[:50]:
     print("{:.2f}\t{}".format(coef[idx], feature_names[idx]))
 
