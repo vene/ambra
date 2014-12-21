@@ -1,9 +1,12 @@
 import sys
 import json
 import numpy as np
+
+from scipy.stats import sem
+
 from sklearn.cross_validation import KFold
 from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.grid_search import GridSearchCV
+from sklearn.grid_search import RandomizedSearchCV, GridSearchCV
 from sklearn.utils import shuffle
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -91,7 +94,7 @@ class NgramLolAnalyzer(BaseEstimator):
     def __call__(self, doc):
         return [feature for sentence in doc
                 for feature in self._word_ngrams(sentence)]
-    
+
 
 class MySelectKBest(SelectKBest):
     def fit(self, X, y):
@@ -116,14 +119,16 @@ Y_possible = np.array([doc['all_fine_intervals'] for doc in entries])
 X, Y, Y_possible = shuffle(X, Y, Y_possible, random_state=0)
 
 # make it run fast
-limit = 100
+limit = 500
 X = X[:limit]
 Y = Y[:limit]
 Y_possible = Y_possible[:limit]
 
 pipe = MyPipeline([('vect', Proj(LengthFeatures(), key='lemmas')),
                    ('scale', StandardScaler(with_mean=False, with_std=True)),
-                   ('clf', IntervalLogisticRegression(n_neighbors=10))])
+                   ('clf', IntervalLogisticRegression(n_neighbors=10,
+                                                      limit_pairs=0.1,
+                                                      random_state=0))])
 
 
 grid = GridSearchCV(pipe,
@@ -134,9 +139,10 @@ grid = GridSearchCV(pipe,
                     n_jobs=1)
 
 grid.fit(X, Y)
-print grid.best_score_, grid.best_params_
+grid_scores = [k.mean_validation_score for k in grid.grid_scores_]
+print "{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores))
+print grid.best_estimator_.steps[-1][-1].n_pairs_, " total pairs."
 print grid.best_estimator_.steps[-1][-1].coef_.ravel()
-
 
 vectorizer = TfidfVectorizer(use_idf=False, norm='l1', analyzer=NgramLolAnalyzer(lower=False))
 
@@ -147,33 +153,38 @@ union = FeatureUnion([('lenghts', Proj(LengthFeatures(), key='lemmas')),
 pipe = MyPipeline([('union', union),
                    ('scale', StandardScaler(with_mean=False, with_std=True)),
                    ('fs', MySelectKBest(chi2)),
-                   ('clf', IntervalLogisticRegression(n_neighbors=10))])
+                   ('clf', IntervalLogisticRegression(n_neighbors=10,
+                                                      limit_pairs=0.1,
+                                                      random_state=0))])
 
 
 grid_params = {
 	'clf__C' : np.logspace(-3, 3, 3),
-	'union__pos__transf__min_df' : [3, 2, 1],
-	'union__pos__transf__max_df' : [1.0, 0.75, 0.5],
-        'union__pos__transf__analyzer__ngram_range' : [(2, 3), (2, 2), (3, 3)],
-	'union__tokens__transf__min_df' : [3, 2, 1],
-	'union__tokens__transf__max_df' : [1.0, 0.75, 0.5],
-        'union__tokens__transf__analyzer__ngram_range' : [(2, 3), (2, 2), (3, 3)],
-        'fs__k' : [200, 300, 400]
+	'union__pos__transf__min_df' : [10, 5, 1],
+	'union__pos__transf__max_df' : [1.0, 0.99, 0.9, 0.8],
+    'union__pos__transf__analyzer__ngram_range' : [(2, 3), (2, 2)],
+	'union__tokens__transf__min_df' : [10, 5, 1],
+	'union__tokens__transf__max_df' : [1.0, 0.99, 0.9, 0.8],
+    'union__tokens__transf__analyzer__ngram_range' : [(1, 3), (1, 2), (1, 1)],
+    'fs__k' : [50, 200, 400]
 }
 
-grid = GridSearchCV(pipe,
-                    grid_params,
-                    verbose=True, cv=KFold(len(X), n_folds=5),
-                    scoring=semeval_interval_scorer,
-                    scorer_params=dict(Y_possible=Y_possible),
-                    n_jobs=1)
+grid = RandomizedSearchCV(pipe,
+                          grid_params,
+                          verbose=True, cv=KFold(len(X), n_folds=5),
+                          scoring=semeval_interval_scorer,
+                          scorer_params=dict(Y_possible=Y_possible),
+                          n_iter=10,
+                          n_jobs=4)
 
 grid.fit(X, Y)
-print grid.best_score_, grid.best_params_
+grid_scores = [k.mean_validation_score for k in grid.grid_scores_]
+print "{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores))
+print grid.best_params_
 
 feature_names = grid.best_estimator_.steps[0][1].get_feature_names()
 coef = grid.best_estimator_.steps[-1][-1].coef_.ravel()
 
-for idx in np.argsort(-coef)[:10]:
+for idx in np.argsort(np.abs(coef))[:10]:
     print("{:.2f}\t{}".format(coef[idx], feature_names[idx]))
 

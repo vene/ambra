@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils.extmath import safe_sparse_dot
 
+from sklearn.utils.validation import check_random_state
 from pairwise import pairwise_transform, flip_pairs
 
 
@@ -29,7 +30,7 @@ def _interval_dist(a, b):
 class IntervalLogisticRegression(LogisticRegression):
     def __init__(self, penalty='l2', dual=False, tol=1e-4, C=1.0,
                  random_state=None, solver='liblinear', max_iter=100,
-                 multi_class='ovr', verbose=0, n_neighbors=5):
+                 multi_class='ovr', verbose=0, n_neighbors=5, limit_pairs=1.0):
         self.penalty = penalty
         self.dual = dual
         self.tol = tol
@@ -43,10 +44,14 @@ class IntervalLogisticRegression(LogisticRegression):
         self.multi_class = multi_class
         self.verbose = verbose
         self.n_neighbors = n_neighbors
+        self.limit_pairs = limit_pairs
 
     def fit(self, X, y):
-        X_pw = pairwise_transform(X, y)
-        X_pw, y_pw = flip_pairs(X_pw, random_state=0)  # not fair
+        rng = check_random_state(self.random_state)
+        X_pw = pairwise_transform(X, y, limit=self.limit_pairs,
+                                  random_state=rng)
+        X_pw, y_pw = flip_pairs(X_pw, random_state=rng)
+        self.n_pairs_ = len(y_pw)
         super(IntervalLogisticRegression, self).fit(X_pw, y_pw)
         train_scores = safe_sparse_dot(X, self.coef_.ravel())
         order = np.argsort(train_scores)
