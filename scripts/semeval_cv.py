@@ -36,7 +36,8 @@ class Proj(BaseEstimator, TransformerMixin):
         self.key = key
 
     def fit(self, X, y=None):
-        return self.transf.fit([x[self.key] for x in X], y)
+        self.transf = self.transf.fit([x[self.key] for x in X], y)
+        return self
 
     def transform(self, X):
         return self.transf.transform([x[self.key] for x in X])
@@ -284,8 +285,9 @@ print("{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores)))
 print(grid.best_params_)
 
 feature_names = grid.best_estimator_.steps[0][1].get_feature_names()
+feature_names = np.array(feature_names)[
+    grid.best_estimator_.steps[2][1].get_support()]
 coef = grid.best_estimator_.steps[-1][-1].coef_.ravel()
 
 for idx in np.argsort(-np.abs(coef))[:50]:
     print("{:.2f}\t{}".format(coef[idx], feature_names[idx]))
-
