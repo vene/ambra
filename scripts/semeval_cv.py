@@ -16,6 +16,7 @@ from sklearn.feature_selection import SelectKBest, chi2
 
 from ambra.classifiers import IntervalLogisticRegression
 from ambra.interval_scoring import semeval_interval_scorer
+from ambra.temporal_feature_extraction import get_temporal_feature
 
 class MyPipeline(Pipeline):
     def predict(self, X, Y_possible):
@@ -101,6 +102,16 @@ class StylisticFeatures(BaseEstimator, TransformerMixin):
     def get_feature_names(self):
         return ['ASL', 'AWL', 'LD', 'LR']
 
+class TemporalFeature(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        #x in X is a list of sents
+        return np.row_stack([get_temporal_feature(doc) for doc in X])
+
+    def get_feature_names(self):
+        return ['YEAR']
 
 class NgramLolAnalyzer(BaseEstimator):
     def _word_ngrams(self, tokens, stop_words=None):
@@ -160,6 +171,26 @@ if limit:
     X = X[:limit]
     Y = Y[:limit]
     Y_possible = Y_possible[:limit]
+
+print("Temporal feature")
+print("===============")
+pipe = MyPipeline([('temp', TemporalFeature()),
+                   ('clf', IntervalLogisticRegression(n_neighbors=10,
+                                                      limit_pairs=limit_pairs,
+                                                      random_state=0))])
+
+grid = GridSearchCV(pipe,
+                    dict(clf__C=np.logspace(-3, 3, 7)),
+                    verbose=False, cv=KFold(len(X), n_folds=5),
+                    scoring=semeval_interval_scorer,
+                    scorer_params=dict(Y_possible=Y_possible),
+                    n_jobs=1)
+
+grid.fit(X, Y)
+grid_scores = [k.mean_validation_score for k in grid.grid_scores_]
+print("{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores)))
+print(grid.best_estimator_.steps[-1][-1].n_pairs_, " total pairs.")
+print(grid.best_estimator_.steps[-1][-1].coef_.ravel())
 
 print("Length features")
 print("===============")
