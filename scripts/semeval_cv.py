@@ -14,7 +14,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import SelectKBest, chi2
 
-from ambra.classifiers import IntervalLogisticRegression
+from ambra.classifiers import IntervalLogisticRegression, IntervalRidge
 from ambra.interval_scoring import semeval_interval_scorer
 from ambra.temporal_feature_extraction import get_temporal_feature
 
@@ -108,11 +108,19 @@ class TemporalFeature(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X, y=None):
+        if self.wiki_file:
+            with open(self.wiki_file) as f:
+                wiki_dict = json.load(f)
+        else:
+            wiki_dict = None
         #x in X is a list of sents
-        return np.row_stack([get_temporal_feature(doc) for doc in X])
+        return np.row_stack([get_temporal_feature(doc, wiki_dict) for doc in X])
 
     def get_feature_names(self):
         return ['YEAR']
+
+    def __init__(self, wiki_file=""):
+        self.wiki_file = wiki_file
 
 class NgramLolAnalyzer(BaseEstimator):
     def _word_ngrams(self, tokens, stop_words=None):
@@ -173,9 +181,30 @@ if limit:
     Y = Y[:limit]
     Y_possible = Y_possible[:limit]
 
+print("Length features (regression)")
+print("===============")
+
+pipe = MyPipeline([('lenghts', Proj(LengthFeatures(), key='lemmas')),
+                   ('scale', StandardScaler(with_mean=False, with_std=True)),
+                   ('clf', IntervalRidge(max_iter=100))])
+
+grid = GridSearchCV(pipe,
+                    dict(clf__alpha= np.power(10.0, range(-5,1))),
+                    verbose=False, cv=KFold(len(X), n_folds=5),
+                    scoring=semeval_interval_scorer,
+                    scorer_params=dict(Y_possible=Y_possible),
+                    n_jobs=1)
+
+grid.fit(X, Y)
+grid_scores = [k.mean_validation_score for k in grid.grid_scores_]
+print("{:.3f} +/- {:.4f}".format(grid.best_score_, sem(grid_scores)))
+print(grid.best_estimator_.steps[-1][-1].coef_.ravel())
+print(grid.best_params_)
+print()
+
 print("Temporal feature")
 print("===============")
-pipe = MyPipeline([('temp', TemporalFeature()),
+pipe = MyPipeline([('temp', TemporalFeature(sys.argv[2] if len(sys.argv) > 2 else "")),
                    ('clf', IntervalLogisticRegression(n_neighbors=10,
                                                       limit_pairs=limit_pairs,
                                                       random_state=0))])

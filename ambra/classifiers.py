@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.utils.extmath import safe_sparse_dot
 
 from sklearn.utils.validation import check_random_state
@@ -26,6 +26,29 @@ def _interval_dist(a, b):
     else:
         return np.abs(0.5 * (b_lo + b_hi - a_lo - a_hi))
 
+
+class IntervalRidge(Ridge):		
+    def predict(self, X, Y_possible):
+        predicted_years = super(IntervalRidge, self).predict(X)
+        predicted_intervals = np.array([self.get_interval(possible_intervals, predicted_year) 
+		for possible_intervals, predicted_year in zip(Y_possible, predicted_years)])
+	return predicted_intervals
+
+    def fit(self, X, Y):
+        Y_regression = np.array([np.mean(y) for y in Y])
+	return super(IntervalRidge, self).fit(X, Y_regression)
+
+    def get_interval(self, intervals, year):
+        year = int(year)
+        for interval in intervals:
+            if interval[0] <= year <= interval[1]:
+                return interval
+        # if the year is not included in any of the intervals, 
+	    # it is situated either to the left or to the right of the possible intervals
+        if year < intervals[0][0]:
+            return intervals[0]
+        else:
+	    return intervals[-1]
 
 class IntervalLogisticRegression(LogisticRegression):
     def __init__(self, penalty='l2', dual=False, tol=1e-4, C=1.0,
