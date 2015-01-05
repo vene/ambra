@@ -27,10 +27,10 @@ def _interval_dist(a, b):
         return np.abs(0.5 * (b_lo + b_hi - a_lo - a_hi))
 
 
-class IntervalRidge(Ridge):		
+class IntervalRidge(Ridge):
     def predict(self, X, Y_possible):
         predicted_years = super(IntervalRidge, self).predict(X)
-        predicted_intervals = np.array([self.get_interval(possible_intervals, predicted_year) 
+        predicted_intervals = np.array([self.get_interval(possible_intervals, predicted_year)
 		for possible_intervals, predicted_year in zip(Y_possible, predicted_years)])
 	return predicted_intervals
 
@@ -40,15 +40,17 @@ class IntervalRidge(Ridge):
 
     def get_interval(self, intervals, year):
         year = int(year)
-        for interval in intervals:
-            if interval[0] <= year <= interval[1]:
-                return interval
-        # if the year is not included in any of the intervals, 
-	    # it is situated either to the left or to the right of the possible intervals
+        # if the year is not included in any of the intervals,
+        # it is situated either to the left or to the right of the possible intervals
         if year < intervals[0][0]:
             return intervals[0]
+        elif year > intervals[-1][1]:
+            return intervals[-1]
         else:
-	    return intervals[-1]
+            # TODO: can be implemented with np.searchsorted
+            for interval in intervals:
+                if interval[0] <= year <= interval[1]:
+                    return interval
 
 class IntervalLogisticRegression(LogisticRegression):
     def __init__(self, penalty='l2', dual=False, tol=1e-4, C=1.0,
