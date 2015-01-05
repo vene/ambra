@@ -1,8 +1,10 @@
 import numpy as np
+
+from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.utils.extmath import safe_sparse_dot
-
 from sklearn.utils.validation import check_random_state
+
 from pairwise import pairwise_transform, flip_pairs
 
 
@@ -25,6 +27,46 @@ def _interval_dist(a, b):
         return 0.0
     else:
         return np.abs(0.5 * (b_lo + b_hi - a_lo - a_hi))
+
+
+class DummyIntervalClassifier(BaseEstimator):
+    """Dummy predictor that chooses one of the possible intervals.
+
+    Possible target intervals have to be passed along with each training
+    instance. Can be used as a simple baseline for sanity-checking.
+
+    Parameters
+    ----------
+    method: {"center" (default)|"random"},
+        If "center", always predicts the middle interval from the list given.
+        If "random", an interval is uniformly picked.
+
+    random_state: None (default) int or np.random object,
+        Seed for the random number generator. Only used if `method="random"`.
+
+    """
+    def __init__(self, method="center", random_state=None):
+        self.method = method
+        self.random_state = random_state
+
+    def fit(self, X, Y):
+        pass
+
+    def _predict_interval(self, possible_intervals, rng=None):
+        if self.method == "center":
+            return possible_intervals[len(possible_intervals) / 2]
+        elif self.method == "random":
+            if rng is None:
+                rng = check_random_state(self.random_state)
+            return possible_intervals[rng.randint(len(possible_intervals))]
+
+    def predict(self, X, Y_possible):
+        if self.method == "random":
+            rng = check_random_state(self.random_state)
+        else:
+            rng = None
+        return [self._predict_interval(possible_intervals, rng)
+                for possible_intervals in Y_possible]
 
 
 class IntervalRidge(Ridge):
