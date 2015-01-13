@@ -7,7 +7,6 @@ from scipy.stats import sem
 
 from sklearn.cross_validation import KFold
 from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.grid_search import RandomizedSearchCV, GridSearchCV
 from sklearn.utils import shuffle
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -17,6 +16,7 @@ from sklearn.feature_selection import SelectKBest, chi2
 from ambra.classifiers import IntervalLogisticRegression, IntervalRidge
 from ambra.interval_scoring import semeval_interval_scorer
 from ambra.temporal_feature_extraction import get_temporal_feature
+from ambra.grid_search import RandomizedSearchCV, GridSearchCV
 
 class MyPipeline(Pipeline):
     def predict(self, X, Y_possible):
