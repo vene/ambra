@@ -3,11 +3,11 @@ import time
 
 import numpy as np
 
-from sklearn.utils import indexable, safe_indexing
+from sklearn.utils import safe_indexing
 from sklearn.base import is_classifier, clone
 from sklearn.metrics.scorer import check_scoring
 from sklearn.externals.joblib import Parallel, delayed, logger
-from sklearn.utils.validation import _num_samples
+from ambra.backports import _num_samples, indexable
 from sklearn.cross_validation import check_cv
 
 def _safe_split(estimator, X, y, indices, train_indices=None):

@@ -11,7 +11,7 @@ from sklearn.cross_validation import check_cv
 from sklearn.externals import six
 from sklearn.externals.joblib import Parallel, delayed
 
-from sklearn.utils.validation import _num_samples, indexable
+from ambra.backports import _num_samples, indexable
 
 from .cross_validation import _fit_and_score
 

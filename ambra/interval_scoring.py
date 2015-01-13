@@ -39,4 +39,4 @@ def semeval_interval_score(Y_pred, Y_true, Y_possible):
 
 def semeval_interval_scorer(est, X, Y, Y_possible):
     pred = est.predict(X, Y_possible)
-    return -semeval_interval_score(pred, Y, Y_possible)
+    return 1 - semeval_interval_score(pred, Y, Y_possible)

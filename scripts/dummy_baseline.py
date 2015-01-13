@@ -30,7 +30,6 @@ for method in ["center", "random"]:
                                    X, Y, cv=KFold(len(X), n_folds=5),
                                    scoring=semeval_interval_scorer,
                                    scorer_params=dict(Y_possible=Y_possible))
-    dummy_scores = 1 + dummy_scores
     print("{} \t {:.3f} \pm {:.3f}".format(method,
                                            np.mean(dummy_scores),
                                            sem(dummy_scores)))

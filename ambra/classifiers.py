@@ -112,6 +112,7 @@ class IntervalLogisticRegression(LogisticRegression):
         self.verbose = verbose
         self.n_neighbors = n_neighbors
         self.limit_pairs = limit_pairs
+        self.loss = 'lr'  # required for sklearn 0.15.2
 
     def fit(self, X, y):
         rng = check_random_state(self.random_state)

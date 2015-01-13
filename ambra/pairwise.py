@@ -2,7 +2,9 @@ import warnings
 
 import numpy as np
 import scipy.sparse as sp
-from sklearn.utils.validation import check_array, check_random_state
+from sklearn.utils.validation import check_random_state
+
+from ambra.backports import check_array
 
 
 def _safe_sparse_add_row(X, row):
