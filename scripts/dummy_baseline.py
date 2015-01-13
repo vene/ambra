@@ -5,7 +5,8 @@ import numpy as np
 
 from scipy.stats import sem
 
-from sklearn.cross_validation import cross_val_score, KFold
+from sklearn.cross_validation import KFold
+from ambra.cross_validation import cross_val_score
 from sklearn.utils import shuffle
 from ambra.classifiers import DummyIntervalClassifier
 
